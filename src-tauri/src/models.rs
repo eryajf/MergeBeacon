@@ -848,8 +848,6 @@ pub struct AiConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key_encrypted: Option<String>,
     pub system_prompt: Option<String>,
-    pub temperature: Option<f32>,
-    pub max_tokens: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

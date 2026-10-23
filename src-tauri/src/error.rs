@@ -109,8 +109,8 @@ impl CommandError {
         Self::new(code, message, retryable, Some(status), source)
     }
 
-    fn from_ai_status(status: u16) -> Self {
-        let (message, retryable) = match status {
+    fn from_ai_status(status: u16, detail: Option<&str>) -> Self {
+        let (base_message, retryable) = match status {
             400 | 422 => ("AI 请求参数未被服务接受，请检查模型和评审设置", false),
             401 => ("AI API Key 无效或已失效，请检查 AI 设置", false),
             403 => ("AI 服务拒绝了请求，请检查 API Key 和 endpoint 权限", false),
@@ -119,6 +119,11 @@ impl CommandError {
             500..=599 => ("AI 服务暂时不可用，请稍后重试", true),
             _ => ("AI 请求失败，请检查 AI 设置后重试", false),
         };
+        let message = detail
+            .map(|detail| Self::safe_message(detail, ""))
+            .filter(|detail| !detail.is_empty())
+            .map(|detail| format!("{base_message}（服务返回：{detail}）"))
+            .unwrap_or_else(|| base_message.to_string());
         Self::new(CommandErrorCode::Ai, message, retryable, Some(status), "ai")
     }
 
@@ -275,7 +280,8 @@ impl From<AppError> for CommandError {
             ),
             AppError::Ai(message) => {
                 if let Some(status) = Self::status_from_message(&message) {
-                    Self::from_ai_status(status)
+                    let detail = message.split_once("): ").map(|(_, detail)| detail);
+                    Self::from_ai_status(status, detail)
                 } else {
                     Self::new(CommandErrorCode::Ai, Self::safe_message(&message, "AI 请求失败"), false, None, "ai")
                 }
@@ -411,12 +417,25 @@ mod tests {
         let unauthorized = CommandError::from(AppError::Ai("AI API error (401): invalid api key".into()));
         assert_eq!(unauthorized.code, CommandErrorCode::Ai);
         assert_eq!(unauthorized.http_status, Some(401));
-        assert_eq!(unauthorized.message, "AI API Key 无效或已失效，请检查 AI 设置");
+        assert_eq!(unauthorized.message, "AI API Key 无效或已失效，请检查 AI 设置（服务返回：invalid api key）");
 
         let rate_limited = CommandError::from(AppError::Ai("AI API error (429): too many requests".into()));
         assert_eq!(rate_limited.code, CommandErrorCode::Ai);
         assert!(rate_limited.retryable);
-        assert_eq!(rate_limited.message, "AI 服务请求过于频繁，请稍后重试");
+        assert_eq!(rate_limited.message, "AI 服务请求过于频繁，请稍后重试（服务返回：too many requests）");
+    }
+
+    #[test]
+    fn preserves_safe_ai_provider_details_without_exposing_urls() {
+        let detailed =
+            CommandError::from(AppError::Ai("AI API error (400): model 'missing-model' was not found".into()));
+        assert!(detailed.message.contains("missing-model"));
+
+        let sensitive = CommandError::from(AppError::Ai(
+            "AI API error (400): see https://provider.example/error?api_key=secret".into(),
+        ));
+        assert_eq!(sensitive.message, "AI 请求参数未被服务接受，请检查模型和评审设置");
+        assert!(!sensitive.message.contains("secret"));
     }
 
     #[test]

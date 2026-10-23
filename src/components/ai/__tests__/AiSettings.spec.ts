@@ -1,7 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AiSettings from "../AiSettings.vue";
-import { aiListModels } from "@/api";
+import { aiListModels, aiTestConnection } from "@/api";
 import { setAppLocale } from "@/i18n";
 
 vi.mock("@/api", () => ({
@@ -16,9 +16,10 @@ describe("AiSettings", () => {
   beforeEach(() => {
     setAppLocale("zh-CN");
     vi.mocked(aiListModels).mockResolvedValue([`gpt<img src=x onerror="alert(1)">model`]);
+    vi.mocked(aiTestConnection).mockReset();
   });
 
-  it("uses the current OpenAI endpoint and default model", () => {
+  it("uses the local Magpie gateway by default", () => {
     const wrapper = mount(AiSettings);
 
     expect(
@@ -26,10 +27,8 @@ describe("AiSettings", () => {
         wrapper.get('.field input[placeholder="https://api.openai.com/v1"]')
           .element as HTMLInputElement
       ).value,
-    ).toBe("https://api.openai.com/v1");
-    expect((wrapper.get(".model-input-wrap input").element as HTMLInputElement).value).toBe(
-      "gpt-5.6",
-    );
+    ).toBe("http://127.0.0.1:3425/v1");
+    expect((wrapper.get(".model-input-wrap input").element as HTMLInputElement).value).toBe("");
   });
 
   it("applies the DeepSeek v4 Flash preset", async () => {
@@ -75,5 +74,25 @@ describe("AiSettings", () => {
     expect(wrapper.get(".model-item").text()).toContain('<img src=x onerror="alert(1)">');
     expect(wrapper.find(".model-item img").exists()).toBe(false);
     expect(wrapper.get(".model-item").element.querySelector("[onerror]")).toBeNull();
+  });
+
+  it("显示测试连接返回的具体错误", async () => {
+    vi.mocked(aiTestConnection).mockRejectedValue({
+      code: "ai",
+      message: "AI API Key 无效或已失效，请检查 AI 设置",
+      retryable: false,
+      request_id: "err-test",
+    });
+    const wrapper = mount(AiSettings);
+    const preset = wrapper.findAll("button").find((button) => button.text() === "OpenAI");
+    expect(preset).toBeDefined();
+    await preset!.trigger("click");
+    const testButton = wrapper.findAll("button").find((button) => button.text() === "测试连接");
+    expect(testButton).toBeDefined();
+
+    await testButton!.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("连接失败：AI API Key 无效或已失效，请检查 AI 设置");
   });
 });

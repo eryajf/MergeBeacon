@@ -11,7 +11,7 @@
 使用统一界面连接 GitHub、GitLab 和 Gitee，集中处理 PR / MR 收件箱、Diff、人工评审、
 合并与 Issue，并可通过 OpenAI 兼容接口进行 AI 辅助评审。
 
-> 当前应用版本：`0.15.0`
+> 当前应用版本：`0.1.0`
 
 ## 界面预览
 
@@ -92,8 +92,8 @@
   - 关闭 Issue 前显示目标仓库和编号确认；已关闭 Issue 可重新打开
 - **AI 辅助评审**
   - 支持 OpenAI 兼容的 Chat Completions 与 Models API
-  - 内置 OpenAI、DeepSeek、通义千问、Moonshot、Ollama 预设
-  - 支持连接测试、模型列表获取与搜索、Temperature、Max Tokens 配置
+  - 内置 Magpie、OpenAI、DeepSeek、通义千问、Moonshot、Ollama 预设
+  - 支持连接测试、模型列表获取与搜索；请求参数由模型服务负责协商
   - 支持普通响应和标准 SSE 流式响应；每次流式请求使用独立 `request_id`，并可主动停止当前评审
   - 评审意见默认使用当前界面语言，也可在开始评审前手动切换为简体中文或英文
   - 每次评审在启动时固定意见语言；界面语言的后续变化不会改变正在进行的请求
@@ -267,10 +267,10 @@ Token 至少需要读取仓库、PR / MR 和 Issue 的权限；提交评审、�
 ### 6. 配置和使用 AI 评审
 
 1. 打开 **设置 → AI 评审设置**。
-2. 选择预设或填写 OpenAI 兼容 API 端点。
+2. 默认使用本机 Magpie 网关；也可以选择其他预设或填写 OpenAI 兼容 API 端点。Magpie 需要先运行，模型从其 `/v1/models` 目录读取。
 3. 输入 API Key，点击 **保存设置**。
 4. 点击 **获取模型** 并选择模型。
-5. 调整 Temperature、Max Tokens，并使用 **测试连接** 验证配置。
+5. 使用 **测试连接** 验证配置。
 6. 打开 PR / MR 的 **AI 评审** 页签，选择聚焦模式和意见语言后开始评审。意见语言默认跟随
    当前界面，也可单独指定为简体中文或英文；需要时可停止当前流式评审。
 7. 将建议加入评审草稿、编辑或忽略；点击文件位置可跳转到 Diff，再返回 AI 评审继续处理。
@@ -283,6 +283,7 @@ Token 至少需要读取仓库、PR / MR 和 Issue 的权限；提交评审、�
 
 | 服务 | API 端点 | 默认模型示例 |
 |---|---|---|
+| Magpie（本地网关） | `http://127.0.0.1:3425/v1` | 从 `/v1/models` 获取 |
 | OpenAI | `https://api.openai.com/v1` | `gpt-5.6` |
 | DeepSeek | `https://api.deepseek.com/v1` | `deepseek-v4-flash` |
 | 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` |

@@ -137,8 +137,6 @@ describe("AiReviewPanel", () => {
       model: "gpt-test",
       api_key_configured: true,
       system_prompt: null,
-      temperature: 0.3,
-      max_tokens: 8192,
     });
     vi.mocked(prDetail).mockResolvedValue(prDetailResult());
     vi.mocked(prDiff).mockResolvedValue({
@@ -320,8 +318,6 @@ describe("AiReviewPanel", () => {
       model: "gpt-test",
       api_key_configured: true,
       system_prompt: null,
-      temperature: 0.3,
-      max_tokens: 8192,
     });
     await flushPromises();
 

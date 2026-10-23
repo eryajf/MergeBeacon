@@ -5,8 +5,8 @@ use crate::error::AppError;
 use crate::models::AiConfig;
 
 const CONFIG_FILE: &str = "ai_config.json";
-const DEFAULT_AI_ENDPOINT: &str = "https://api.openai.com/v1";
-const DEFAULT_AI_MODEL: &str = "gpt-5.6";
+const DEFAULT_AI_ENDPOINT: &str = "http://127.0.0.1:3425/v1";
+const DEFAULT_AI_MODEL: &str = "";
 
 fn default_ai_config() -> AiConfig {
     AiConfig {
@@ -15,8 +15,6 @@ fn default_ai_config() -> AiConfig {
         api_key_configured: false,
         api_key_encrypted: None,
         system_prompt: None,
-        temperature: Some(0.3),
-        max_tokens: Some(8192),
     }
 }
 
@@ -129,10 +127,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_config_uses_current_openai_defaults() {
+    fn default_config_uses_magpie_gateway_defaults() {
         let config = default_ai_config();
 
-        assert_eq!(config.endpoint, "https://api.openai.com/v1");
-        assert_eq!(config.model, "gpt-5.6");
+        assert_eq!(config.endpoint, "http://127.0.0.1:3425/v1");
+        assert!(config.model.is_empty());
     }
 }

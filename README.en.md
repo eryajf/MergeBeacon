@@ -12,7 +12,7 @@ A cross-platform desktop client for PR review and Issue management, built with
 manage PR / MR inboxes, diffs, manual reviews, merges, and Issues, with optional AI-assisted
 reviews through an OpenAI-compatible API.
 
-> Current application version: `0.15.0`
+> Current application version: `0.1.0`
 
 ## Screenshots
 
@@ -126,8 +126,8 @@ reviews through an OpenAI-compatible API.
   - Confirms the target repository and number before closing an Issue and can reopen a closed Issue
 - **AI-assisted review**
   - Supports OpenAI-compatible Chat Completions and Models APIs
-  - Includes presets for OpenAI, DeepSeek, Qwen, Moonshot, and Ollama
-  - Supports connection tests, model list retrieval and search, Temperature, and Max Tokens settings
+  - Includes presets for Magpie, OpenAI, DeepSeek, Qwen, Moonshot, and Ollama
+  - Supports connection tests, model list retrieval, and search; request parameters are negotiated by the model service
   - Supports regular responses and standard SSE streaming, with a unique `request_id` for every stream,
     and can stop the active review explicitly
   - Uses the current interface language for review findings by default, with a manual choice of Simplified
@@ -334,10 +334,10 @@ change. Gitee does not support Draft creation, so the Draft option is not shown.
 ### 6. Configure and use AI review
 
 1. Open **Settings → AI Review Settings**.
-2. Select a preset or enter an OpenAI-compatible API endpoint.
+2. The local Magpie gateway is selected by default; you can choose another preset or enter an OpenAI-compatible endpoint. Magpie must be running, and models are loaded from its `/v1/models` catalog.
 3. Enter the API Key and select **Save Settings**.
 4. Select **Fetch Models** and choose a model.
-5. Adjust Temperature and Max Tokens, then use **Test Connection** to verify the configuration.
+5. Use **Test Connection** to verify the configuration.
 6. Open the **AI Review** tab for a PR / MR, choose a focus and **Review language**, and start the review.
    The review language follows the current interface by default and can be set independently to Simplified
    Chinese or English, and the active streaming review can be stopped when needed.
@@ -354,6 +354,7 @@ Common endpoint examples:
 
 | Service | API endpoint | Example default model |
 |---|---|---|
+| Magpie (local gateway) | `http://127.0.0.1:3425/v1` | Loaded from `/v1/models` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-5.6` |
 | DeepSeek | `https://api.deepseek.com/v1` | `deepseek-v4-flash` |
 | Qwen | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` |

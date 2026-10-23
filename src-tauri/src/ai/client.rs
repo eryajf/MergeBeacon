@@ -27,7 +27,6 @@ pub struct AiReviewOptions<'a> {
     pub focus: Option<&'a AiReviewFocus>,
     pub language: &'a AiReviewLanguage,
     pub custom_prompt: Option<&'a str>,
-    pub temperature: f32,
     pub max_tokens: u32,
 }
 
@@ -66,27 +65,20 @@ where
     Ok(ChatCompletion { content: accumulated, finish_reason, did_fallback_from_json_mode: false })
 }
 
-fn chat_request_body(
-    model: &str,
-    messages: &[Value],
-    temperature: f32,
-    max_tokens: u32,
-    stream: bool,
-    json_mode: bool,
-) -> Value {
+fn chat_request_body(model: &str, messages: &[Value], max_tokens: u32, stream: bool, json_mode: bool) -> Value {
     let mut body = serde_json::json!({
         "model": model,
         "messages": messages,
-        "temperature": temperature,
     });
-    let uses_gpt_5_6_parameters = model == "gpt-5.6" || model.starts_with("gpt-5.6-");
+    let model_name = model.rsplit('/').next().unwrap_or(model);
+    let uses_gpt_5_6_parameters = model_name == "gpt-5.6" || model_name.starts_with("gpt-5.6-");
     if uses_gpt_5_6_parameters {
         body["max_completion_tokens"] = Value::from(max_tokens);
         body["reasoning_effort"] = Value::String("none".to_string());
     } else {
         body["max_tokens"] = Value::from(max_tokens);
     }
-    if model.starts_with("deepseek-v4-") {
+    if model_name.starts_with("deepseek-v4-") {
         body["thinking"] = serde_json::json!({ "type": "disabled" });
     }
     if stream {
@@ -166,7 +158,6 @@ impl AiClient {
     async fn send_chat_request(
         &self,
         messages: &[Value],
-        temperature: f32,
         max_tokens: u32,
         stream: bool,
         json_mode: bool,
@@ -175,7 +166,7 @@ impl AiClient {
         let mut use_json_mode = json_mode;
         let mut did_fallback_from_json_mode = false;
         loop {
-            let body = chat_request_body(&self.model, messages, temperature, max_tokens, stream, use_json_mode);
+            let body = chat_request_body(&self.model, messages, max_tokens, stream, use_json_mode);
             let mut request = self
                 .client
                 .post(&url)
@@ -201,15 +192,9 @@ impl AiClient {
     }
 
     /// Send a chat completion request (non-streaming)
-    async fn chat(
-        &self,
-        messages: &[Value],
-        temperature: f32,
-        max_tokens: u32,
-        json_mode: bool,
-    ) -> Result<ChatCompletion, AppError> {
+    async fn chat(&self, messages: &[Value], max_tokens: u32, json_mode: bool) -> Result<ChatCompletion, AppError> {
         let (resp, did_fallback_from_json_mode) =
-            self.send_chat_request(messages, temperature, max_tokens, false, json_mode).await?;
+            self.send_chat_request(messages, max_tokens, false, json_mode).await?;
 
         let json: Value = resp.json().await?;
         let content = json["choices"][0]["message"]["content"].as_str().unwrap_or("").to_string();
@@ -223,7 +208,6 @@ impl AiClient {
     async fn chat_stream<F>(
         &self,
         messages: &[Value],
-        temperature: f32,
         max_tokens: u32,
         json_mode: bool,
         on_token: F,
@@ -231,8 +215,7 @@ impl AiClient {
     where
         F: FnMut(&str) -> Result<(), AppError> + Send,
     {
-        let (resp, did_fallback_from_json_mode) =
-            self.send_chat_request(messages, temperature, max_tokens, true, json_mode).await?;
+        let (resp, did_fallback_from_json_mode) = self.send_chat_request(messages, max_tokens, true, json_mode).await?;
 
         let stream =
             resp.bytes_stream().map(|chunk| chunk.map(|bytes| bytes.to_vec()).map_err(|error| error.to_string()));
@@ -256,21 +239,20 @@ impl AiClient {
             serde_json::json!({"role": "user", "content": user_message}),
         ];
 
-        let response = self.chat(&messages, options.temperature, options.max_tokens, true).await?;
+        let response = self.chat(&messages, options.max_tokens, true).await?;
         self.parse_review_completion(&response)
     }
 
     pub async fn draft_pull_request(
         &self,
         request: &AiPrDraftRequest,
-        temperature: f32,
         max_tokens: u32,
     ) -> Result<AiPrDraftResult, AppError> {
         let messages = vec![
             serde_json::json!({"role": "system", "content": prompt::build_pr_draft_system_prompt()}),
             serde_json::json!({"role": "user", "content": prompt::build_pr_draft_user_message(request)}),
         ];
-        let response = self.chat(&messages, temperature, max_tokens, false).await?;
+        let response = self.chat(&messages, max_tokens, false).await?;
         Self::parse_pr_draft_response(&response.content)
     }
 
@@ -294,7 +276,7 @@ impl AiClient {
             serde_json::json!({"role": "user", "content": user_message}),
         ];
 
-        let response = self.chat_stream(&messages, options.temperature, options.max_tokens, true, on_token).await?;
+        let response = self.chat_stream(&messages, options.max_tokens, true, on_token).await?;
 
         self.parse_review_completion(&response)
     }
@@ -431,10 +413,7 @@ impl AiClient {
     pub async fn test_connection(&self) -> Result<bool, AppError> {
         let messages = vec![serde_json::json!({"role": "user", "content": "Hello, respond with just 'ok'."})];
 
-        match self.chat(&messages, 0.0, 50, false).await {
-            Ok(_) => Ok(true),
-            Err(_) => Ok(false),
-        }
+        self.chat(&messages, 50, false).await.map(|_| true)
     }
 }
 
@@ -642,11 +621,12 @@ mod tests {
     #[test]
     fn review_request_enables_json_mode_without_changing_plain_chat_requests() {
         let messages = vec![serde_json::json!({ "role": "user", "content": "Return JSON" })];
-        let review = chat_request_body("test", &messages, 0.3, 2048, true, true);
-        let plain = chat_request_body("test", &messages, 0.3, 50, false, false);
+        let review = chat_request_body("test", &messages, 2048, true, true);
+        let plain = chat_request_body("test", &messages, 50, false, false);
 
         assert_eq!(review["response_format"]["type"], "json_object");
         assert_eq!(review["stream"], true);
+        assert!(review.get("temperature").is_none());
         assert!(plain.get("response_format").is_none());
         assert!(plain.get("stream").is_none());
     }
@@ -655,8 +635,8 @@ mod tests {
     fn gpt_5_6_requests_preserve_the_previous_non_reasoning_behavior() {
         let messages = vec![serde_json::json!({ "role": "user", "content": "Review this" })];
 
-        let gpt_5_6 = chat_request_body("gpt-5.6", &messages, 0.3, 2048, true, true);
-        let compatible_provider = chat_request_body("qwen-plus", &messages, 0.3, 2048, true, true);
+        let gpt_5_6 = chat_request_body("gpt-5.6", &messages, 2048, true, true);
+        let compatible_provider = chat_request_body("qwen-plus", &messages, 2048, true, true);
 
         assert_eq!(gpt_5_6["reasoning_effort"], "none");
         assert_eq!(gpt_5_6["max_completion_tokens"], 2048);
@@ -671,7 +651,7 @@ mod tests {
         let messages = vec![serde_json::json!({ "role": "user", "content": "Review this" })];
 
         for model in ["deepseek-v4-flash", "deepseek-v4-pro"] {
-            let body = chat_request_body(model, &messages, 0.3, 2048, true, true);
+            let body = chat_request_body(model, &messages, 2048, true, true);
 
             assert_eq!(body["thinking"]["type"], "disabled");
             assert_eq!(body["max_tokens"], 2048);
@@ -715,7 +695,7 @@ mod tests {
 
         let client = AiClient::new(server.uri(), "test".to_string(), "secret".to_string());
         let messages = vec![serde_json::json!({ "role": "user", "content": "Return JSON" })];
-        let completion = client.chat(&messages, 0.3, 2048, true).await.unwrap();
+        let completion = client.chat(&messages, 2048, true).await.unwrap();
 
         assert_eq!(completion.content, "{\"suggestions\":[],\"summary\":\"fallback\"}");
         assert_eq!(completion.finish_reason.as_deref(), Some("stop"));
@@ -742,7 +722,7 @@ mod tests {
 
         let client = AiClient::new(server.uri(), "test".to_string(), "secret".to_string());
         let messages = vec![serde_json::json!({ "role": "user", "content": "Return JSON" })];
-        let error = client.chat(&messages, 0.3, 2048, true).await.unwrap_err();
+        let error = client.chat(&messages, 2048, true).await.unwrap_err();
 
         let message = error.to_string();
         assert!(message.contains("400 Bad Request"));
@@ -751,6 +731,22 @@ mod tests {
         assert_eq!(requests.len(), 1);
         assert!(request_uses_json_mode(&requests[0]));
         server.verify().await;
+    }
+
+    #[tokio::test]
+    async fn test_connection_propagates_provider_errors() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(401).set_body_string("invalid api key"))
+            .mount(&server)
+            .await;
+
+        let client = AiClient::new(server.uri(), "test-model".to_string(), "secret".to_string());
+        let error = client.test_connection().await.unwrap_err();
+
+        assert!(error.to_string().contains("401"));
+        assert!(error.to_string().contains("invalid api key"));
     }
 
     #[test]

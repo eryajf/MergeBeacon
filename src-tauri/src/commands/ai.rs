@@ -6,6 +6,24 @@ use crate::models::{AiConfig, AiPrDraftRequest, AiPrDraftResult, AiReviewRequest
 use crate::state::AppState;
 use tauri::{AppHandle, Emitter, State};
 
+const DEFAULT_REVIEW_MAX_TOKENS: u32 = 8192;
+const DEFAULT_DRAFT_MAX_TOKENS: u32 = 4096;
+const DEFAULT_MAGPIE_API_KEY: &str = "magpie-mergebeacon";
+
+fn is_local_magpie_endpoint(endpoint: &str) -> bool {
+    matches!(endpoint.trim_end_matches('/'), "http://127.0.0.1:3425/v1" | "http://localhost:3425/v1")
+}
+
+fn configured_api_key(state: &AppState, endpoint: &str) -> Result<String, CommandError> {
+    match state.ai_config.get_api_key() {
+        Ok(key) => Ok(key),
+        Err(AppError::Ai(message)) if message == "No API key configured" && is_local_magpie_endpoint(endpoint) => {
+            Ok(DEFAULT_MAGPIE_API_KEY.to_string())
+        }
+        Err(error) => Err(CommandError::from(error)),
+    }
+}
+
 #[tauri::command]
 pub async fn ai_get_config(state: State<'_, AppState>) -> CommandResult<AiConfig> {
     let mut config = state.ai_config.get_config().map_err(CommandError::from)?;
@@ -34,7 +52,10 @@ pub async fn ai_save_api_key(state: State<'_, AppState>, api_key: String) -> Com
 
 fn configured_ai_client(state: &AppState) -> Result<(AiConfig, AiClient), CommandError> {
     let config = state.ai_config.get_config().map_err(CommandError::from)?;
-    let api_key = state.ai_config.get_api_key().map_err(CommandError::from)?;
+    if config.model.trim().is_empty() {
+        return Err(CommandError::from(AppError::Ai("请先选择可用的 AI 模型".to_string())));
+    }
+    let api_key = configured_api_key(state, &config.endpoint)?;
     let client = AiClient::new(config.endpoint.clone(), config.model.clone(), api_key);
     Ok((config, client))
 }
@@ -89,7 +110,7 @@ pub async fn ai_pr_draft(
     let request_id = validate_ai_request_id(request_id)?;
     let request = validate_pr_draft_request(request)?;
     // PR / MR 草稿与 AI 评审共用同一份模型、端点和凭证配置。
-    let (config, client) = configured_ai_client(&state)?;
+    let (_config, client) = configured_ai_client(&state)?;
     let operation = state.operations.begin_ai().await?;
     let registry = state.ai_tasks.clone();
     let generation = registry.next_generation();
@@ -101,15 +122,7 @@ pub async fn ai_pr_draft(
         if start_rx.await.is_err() {
             return None;
         }
-        Some(
-            client
-                .draft_pull_request(
-                    &request,
-                    config.temperature.unwrap_or(0.2).clamp(0.0, 1.0),
-                    config.max_tokens.unwrap_or(4096).clamp(512, 4096),
-                )
-                .await,
-        )
+        Some(client.draft_pull_request(&request, DEFAULT_DRAFT_MAX_TOKENS).await)
     });
 
     registry.replace(request_id, generation, task.abort_handle()).await;
@@ -161,8 +174,7 @@ pub async fn ai_review(
                         focus: request.focus.as_ref(),
                         language: &request.language,
                         custom_prompt: config.system_prompt.as_deref(),
-                        temperature: config.temperature.unwrap_or(0.3),
-                        max_tokens: config.max_tokens.unwrap_or(8192),
+                        max_tokens: DEFAULT_REVIEW_MAX_TOKENS,
                     },
                 )
                 .await,
@@ -195,8 +207,6 @@ pub async fn ai_review_stream(
     let request_id = validate_ai_request_id(request_id)?;
     let (config, client) = configured_ai_client(&state)?;
     let system_prompt = config.system_prompt.clone();
-    let temperature = config.temperature.unwrap_or(0.3);
-    let max_tokens = config.max_tokens.unwrap_or(8192);
     let operation = state.operations.begin_ai().await?;
     let registry = state.ai_tasks.clone();
     let generation = registry.next_generation();
@@ -221,8 +231,7 @@ pub async fn ai_review_stream(
                     focus: request.focus.as_ref(),
                     language: &request.language,
                     custom_prompt: system_prompt.as_deref(),
-                    temperature,
-                    max_tokens,
+                    max_tokens: DEFAULT_REVIEW_MAX_TOKENS,
                 },
                 move |token| {
                     chunk_handle
@@ -279,7 +288,7 @@ pub async fn ai_review_cancel(state: State<'_, AppState>, request_id: String) ->
 }
 #[tauri::command]
 pub async fn ai_list_models(state: State<'_, AppState>, endpoint: String) -> CommandResult<Vec<String>> {
-    let api_key = state.ai_config.get_api_key().map_err(CommandError::from)?;
+    let api_key = configured_api_key(&state, &endpoint)?;
 
     // Use a dummy model name — list_models doesn't need a model
     let client = AiClient::new(endpoint, "".to_string(), api_key);
@@ -290,7 +299,7 @@ pub async fn ai_list_models(state: State<'_, AppState>, endpoint: String) -> Com
 #[tauri::command]
 pub async fn ai_test_connection(state: State<'_, AppState>) -> CommandResult<bool> {
     let config = state.ai_config.get_config().map_err(CommandError::from)?;
-    let api_key = state.ai_config.get_api_key().map_err(CommandError::from)?;
+    let api_key = configured_api_key(&state, &config.endpoint)?;
 
     let client = AiClient::new(config.endpoint, config.model, api_key);
 

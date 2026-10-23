@@ -682,8 +682,6 @@ export interface AiConfig {
   api_key_configured: boolean;
   api_key_encrypted?: string | null;
   system_prompt: string | null;
-  temperature: number | null;
-  max_tokens: number | null;
 }
 
 export interface AiReviewRequest {

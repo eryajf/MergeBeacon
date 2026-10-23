@@ -8,18 +8,17 @@ import { getErrorMessage } from "@/utils/error";
 const { t } = useI18n();
 
 const config = ref<AiConfig>({
-  endpoint: "https://api.openai.com/v1",
-  model: "gpt-5.6",
+  endpoint: "http://127.0.0.1:3425/v1",
+  model: "",
   api_key_configured: false,
   system_prompt: null,
-  temperature: 0.3,
-  max_tokens: 8192,
 });
 
 const newApiKey = ref("");
 const testing = ref(false);
 const saving = ref(false);
 const testResult = ref<boolean | null>(null);
+const testError = ref("");
 const saveMsg = ref("");
 
 const models = ref<string[]>([]);
@@ -95,6 +94,11 @@ function highlight(text: string, query: string): HighlightSegment[] {
 }
 
 const presets = computed(() => [
+  {
+    name: t("aiSettings.presetMagpie"),
+    endpoint: "http://127.0.0.1:3425/v1",
+    model: "",
+  },
   { name: "OpenAI", endpoint: "https://api.openai.com/v1", model: "gpt-5.6" },
   { name: "DeepSeek", endpoint: "https://api.deepseek.com/v1", model: "deepseek-v4-flash" },
   {
@@ -139,6 +143,9 @@ async function handleFetchModels() {
 
     const result = await aiListModels(config.value.endpoint);
     models.value = result;
+    if (!config.value.model && result[0]) {
+      config.value.model = result[0];
+    }
     if (result.length === 0) {
       modelError.value = t("aiSettings.loadModelsEmpty");
     }
@@ -178,10 +185,17 @@ async function handleSave() {
 async function handleTest() {
   testing.value = true;
   testResult.value = null;
+  testError.value = "";
+  if (!config.value.model.trim()) {
+    testing.value = false;
+    modelError.value = t("aiSettings.modelRequired");
+    return;
+  }
   try {
     testResult.value = await aiTestConnection();
-  } catch {
+  } catch (e) {
     testResult.value = false;
+    testError.value = getErrorMessage(e, t("aiSettings.connectionFailed"));
   } finally {
     testing.value = false;
   }
@@ -232,7 +246,7 @@ async function handleTest() {
             :value="showModelDropdown ? modelSearch : config.model"
             class="input"
             type="text"
-            :placeholder="config.model || 'gpt-5.6'"
+            :placeholder="config.model || t('aiSettings.modelPlaceholder')"
             @focus="onFocusModel"
             @input="
               modelSearch = ($event.target as HTMLInputElement).value;
@@ -285,24 +299,6 @@ async function handleTest() {
       <p v-else class="hint">{{ t("aiSettings.loadModelsHint") }}</p>
     </div>
 
-    <div class="field">
-      <label>{{ t("aiSettings.temperature", { value: config.temperature ?? 0.3 }) }}</label>
-      <input
-        v-model.number="config.temperature"
-        type="range"
-        min="0"
-        max="2"
-        step="0.1"
-        class="range-input"
-      />
-    </div>
-
-    <div class="field">
-      <label>{{ t("aiSettings.maxTokens") }}</label>
-      <input v-model.number="config.max_tokens" class="input" type="number" min="256" max="32768" />
-      <p class="hint">{{ t("aiSettings.maxTokensHint") }}</p>
-    </div>
-
     <div class="actions">
       <button class="btn" :disabled="testing" @click="handleTest">
         {{ testing ? t("aiSettings.testing") : t("aiSettings.testConnection") }}
@@ -317,7 +313,13 @@ async function handleTest() {
       class="test-result"
       :class="{ success: testResult, fail: !testResult }"
     >
-      {{ testResult ? t("aiSettings.connectionSuccess") : t("aiSettings.connectionFailed") }}
+      {{
+        testResult
+          ? t("aiSettings.connectionSuccess")
+          : testError
+            ? t("aiSettings.connectionFailedDetail", { message: testError })
+            : t("aiSettings.connectionFailed")
+      }}
     </div>
 
     <div v-if="saveMsg" class="save-msg">{{ saveMsg }}</div>
