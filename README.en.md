@@ -14,6 +14,21 @@ reviews through an OpenAI-compatible API.
 
 > Current application version: `0.1.0`
 
+## Publishing from this fork
+
+This fork publishes installers and automatic updates in `eryajf/MergeBeacon` with its own
+updater public key. Before the first release, configure the repository Actions secrets
+`TAURI_SIGNING_PRIVATE_KEY_BASE64` (the exact Tauri signer `.key` file contents, without
+another Base64 encoding) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Back up the private key
+and password outside the repository; never commit them.
+
+Keep the versions in `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, and
+`src-tauri/tauri.conf.json` in sync, then push the matching `vX.Y.Z` tag. Alternatively, run
+`gh workflow run release.yml --ref vX.Y.Z --repo eryajf/MergeBeacon` to build an existing tag.
+The workflow accepts version tags only and publishes its draft after all installers and
+signature checks pass. Apple Developer signing and notarization require separate Apple secrets.
+
+
 ## Screenshots
 
 ### Cross-platform PR inbox

@@ -25,7 +25,7 @@ function validConfig() {
     plugins: {
       updater: {
         pubkey: Buffer.from(publicKey, "utf8").toString("base64"),
-        endpoints: ["https://github.com/tisrop/MergeBeacon/releases/latest/download/latest.json"],
+        endpoints: ["https://github.com/eryajf/MergeBeacon/releases/latest/download/latest.json"],
       },
     },
   };
@@ -52,9 +52,17 @@ describe("updater 配置安全检查", () => {
 
     const appended = validConfig();
     appended.plugins.updater.endpoints.push(
-      "https://github.com/tisrop/MergeBeacon/releases/latest/download/fallback.json",
+      "https://github.com/eryajf/MergeBeacon/releases/latest/download/fallback.json",
     );
     expect(() => assertUpdaterConfig(appended)).toThrow("updater endpoint 必须精确配置");
+  });
+
+  it("拒绝从上游仓库获取 fork 的更新", () => {
+    const config = validConfig();
+    config.plugins.updater.endpoints = [
+      "https://github.com/tisrop/MergeBeacon/releases/latest/download/latest.json",
+    ];
+    expect(() => assertUpdaterConfig(config)).toThrow("updater endpoint 必须精确配置");
   });
 
   it("拒绝损坏或伪装成公钥的 updater key", () => {

@@ -19,7 +19,7 @@ pub struct UpdateCheckResult {
 const MAX_RELEASE_NOTES_CHARS: usize = 16_000;
 const RELEASE_NOTES_TRUNCATED_SUFFIX: &str = "\n\n[更新说明过长，已截断]";
 const WINDOWS_PORTABLE_URL_PATH: [&str; 3] = ["portable", "windows-x86_64", "url"];
-const RELEASE_DOWNLOAD_BASE: &str = "https://github.com/tisrop/MergeBeacon/releases/download";
+const RELEASE_DOWNLOAD_BASE: &str = "https://github.com/eryajf/MergeBeacon/releases/download";
 type AvailableUpdate = (String, Option<String>, Option<String>, Option<String>);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -287,7 +287,7 @@ mod tests {
 
     #[test]
     fn reports_update_metadata_and_portable_url() {
-        let url = "https://github.com/tisrop/MergeBeacon/releases/download/v0.4.0/MergeBeacon_0.4.0_x64-portable.zip";
+        let url = "https://github.com/eryajf/MergeBeacon/releases/download/v0.4.0/MergeBeacon_0.4.0_x64-portable.zip";
         let result = check_result(
             "0.3.0".into(),
             UpdateMode::Portable,
@@ -317,14 +317,15 @@ mod tests {
     #[test]
     fn accepts_only_official_versioned_portable_zip_url() {
         let expected =
-            "https://github.com/tisrop/MergeBeacon/releases/download/v0.4.0/MergeBeacon_0.4.0_x64-portable.zip";
+            "https://github.com/eryajf/MergeBeacon/releases/download/v0.4.0/MergeBeacon_0.4.0_x64-portable.zip";
         let release = json!({"portable":{"windows-x86_64":{"url":expected}}});
         assert_eq!(portable_download_url(&release, "0.4.0"), Ok(expected.into()));
         for invalid in [
             "https://example.com/MergeBeacon_0.4.0_x64-portable.zip",
-            "https://github.com/tisrop/MergeBeacon/releases/download/v0.4.1/MergeBeacon_0.4.1_x64-portable.zip",
-            "https://github.com/tisrop/MergeBeacon/releases/download/v0.4.0/MergeBeacon_0.4.0_x64-portable.exe",
-            "https://github.com/tisrop/MergeBeacon/releases/download/v0.4.0/MergeBeacon_0.4.0_x64_en-US.msi",
+            "https://github.com/tisrop/MergeBeacon/releases/download/v0.4.0/MergeBeacon_0.4.0_x64-portable.zip",
+            "https://github.com/eryajf/MergeBeacon/releases/download/v0.4.1/MergeBeacon_0.4.1_x64-portable.zip",
+            "https://github.com/eryajf/MergeBeacon/releases/download/v0.4.0/MergeBeacon_0.4.0_x64-portable.exe",
+            "https://github.com/eryajf/MergeBeacon/releases/download/v0.4.0/MergeBeacon_0.4.0_x64_en-US.msi",
         ] {
             let release = json!({"portable":{"windows-x86_64":{"url":invalid}}});
             assert!(portable_download_url(&release, "0.4.0").is_err());

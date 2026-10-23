@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 const projectRoot = process.cwd();
 const execFileAsync = promisify(execFile);
 const OFFICIAL_UPDATER_ENDPOINT =
-  "https://github.com/tisrop/MergeBeacon/releases/latest/download/latest.json";
+  "https://github.com/eryajf/MergeBeacon/releases/latest/download/latest.json";
 
 function decodeCanonicalBase64(value, field) {
   if (

@@ -13,6 +13,20 @@
 
 > 当前应用版本：`0.1.0`
 
+## 个人仓库构建发布
+
+本 fork 的安装包与自动更新发布在 `eryajf/MergeBeacon`，使用独立的更新签名公钥。
+首次发布前，在仓库 Actions Secrets 中配置 `TAURI_SIGNING_PRIVATE_KEY_BASE64`
+（Tauri signer 生成的 `.key` 文件原文，不要再次 Base64 编码）和
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。私钥与密码必须备份在仓库外，禁止提交到 Git。
+
+保持 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock` 与
+`src-tauri/tauri.conf.json` 的版本一致，再推送对应的 `vX.Y.Z` 标签即可触发 Release。
+也可执行 `gh workflow run release.yml --ref vX.Y.Z --repo eryajf/MergeBeacon`
+手动构建已有标签；工作流只接受版本标签，安装包和签名校验全部通过后才会发布草稿。
+macOS 的 Apple Developer 签名与公证需要另外配置 Apple 相关 Secrets。
+
+
 ## 界面预览
 
 ### 跨平台 PR 收件箱
